@@ -30,6 +30,9 @@ const (
 
 	// CloseReasonTest is used in tests when closing connections.
 	CloseReasonTest = "test"
+
+	// CloseReasonFailover indicates the connection was closed due to a failover event.
+	CloseReasonFailover = "failover"
 )
 
 // Metric state constants for connection state tracking.
@@ -1184,7 +1187,6 @@ func (p *ConnPool) putConn(ctx context.Context, cn *Conn, freeTurn bool) {
 			case StateClosed:
 				internal.Logger.Printf(ctx, "Unexpected conn[%d] state changed by hook to %v, closing it", cn.GetID(), currentState)
 				shouldCloseConn = true
-				p.removeConnWithLock(cn)
 			default:
 				// Pool as-is
 				internal.Logger.Printf(ctx, "Unexpected conn[%d] state changed by hook to %v, pooling as-is", cn.GetID(), currentState)
@@ -1194,7 +1196,7 @@ func (p *ConnPool) putConn(ctx context.Context, cn *Conn, freeTurn bool) {
 		// unusable conns are expected to become usable at some point (background process is reconnecting them)
 		// put them at the opposite end of the queue
 		// Optimization: if we just transitioned to IDLE, we know it's usable - skip the check
-		if !transitionedToIdle && !cn.IsUsable() {
+		if !transitionedToIdle && !cn.IsUsable() && !shouldCloseConn {
 			if p.cfg.PoolFIFO {
 				p.connsMu.Lock()
 				p.idleConns = append(p.idleConns, cn)
@@ -1212,18 +1214,14 @@ func (p *ConnPool) putConn(ctx context.Context, cn *Conn, freeTurn bool) {
 			p.idleConnsLen.Add(1)
 		}
 
-		// Notify metrics: connection moved from used to idle
-		if cb := getMetricConnectionStateChangeCallback(); cb != nil {
-			cb(ctx, cn, MetricStateUsed, MetricStateIdle)
+		if !shouldCloseConn {
+			// Notify metrics: connection moved from used to idle
+			if cb := getMetricConnectionStateChangeCallback(); cb != nil {
+				cb(ctx, cn, MetricStateUsed, MetricStateIdle)
+			}
 		}
 	} else {
 		shouldCloseConn = true
-		p.removeConnWithLock(cn)
-
-		// Notify metrics: connection removed (used -> nothing)
-		if cb := getMetricConnectionStateChangeCallback(); cb != nil {
-			cb(ctx, cn, MetricStateUsed, "")
-		}
 	}
 
 	if freeTurn {
@@ -1231,7 +1229,12 @@ func (p *ConnPool) putConn(ctx context.Context, cn *Conn, freeTurn bool) {
 	}
 
 	if shouldCloseConn {
-		_ = p.closeConn(cn)
+		reason := CloseReasonStale
+		if cn.closeReason != "" {
+			reason = cn.closeReason
+		}
+		_ = p.CloseConn(ctx, cn, reason, MetricStateUsed)
+		return
 	}
 
 	cn.SetLastPutAtNs(getCachedTimeNs())
@@ -1293,6 +1296,10 @@ func (p *ConnPool) removeConnInternal(ctx context.Context, cn *Conn, reason erro
 func (p *ConnPool) CloseConn(ctx context.Context, cn *Conn, reason string, fromState string) error {
 	p.removeConnWithLock(cn)
 
+	return p.recordMetricAndCloseConn(ctx, cn, reason, fromState)
+}
+
+func (p *ConnPool) recordMetricAndCloseConn(ctx context.Context, cn *Conn, reason, fromState string) error {
 	// Record connection state change: connection is being removed from the specified state
 	if cb := getMetricConnectionStateChangeCallback(); cb != nil && fromState != "" {
 		cb(ctx, cn, fromState, "")
@@ -1380,13 +1387,32 @@ func (p *ConnPool) closed() bool {
 }
 
 func (p *ConnPool) Filter(fn func(*Conn) bool) error {
+	ctx := context.Background()
+
 	p.connsMu.Lock()
 	defer p.connsMu.Unlock()
+
+	idleConnSet := make(map[*Conn]struct{}, len(p.idleConns))
+	for _, ic := range p.idleConns {
+		idleConnSet[ic] = struct{}{}
+	}
 
 	var firstErr error
 	for _, cn := range p.conns {
 		if fn(cn) {
-			if err := p.closeConn(cn); err != nil && firstErr == nil {
+			var err error
+			if _, isIdle := idleConnSet[cn]; isIdle {
+				// Idle connection - remove from pool and close.
+				p.removeConn(cn)
+				err = p.recordMetricAndCloseConn(ctx, cn, CloseReasonFailover, MetricStateIdle)
+			} else {
+				// Used connection - set closeReason and close the connection.
+				// The connection remains in p.conns. When putConn() is called later,
+				// it will close the connection instead of pooling it.
+				cn.closeReason = CloseReasonFailover
+				err = cn.Close()
+			}
+			if err != nil && firstErr == nil {
 				firstErr = err
 			}
 		}
