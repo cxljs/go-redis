@@ -1224,20 +1224,19 @@ func (p *ConnPool) putConn(ctx context.Context, cn *Conn, freeTurn bool) {
 		shouldCloseConn = true
 	}
 
-	if freeTurn {
-		p.freeTurn()
-	}
-
 	if shouldCloseConn {
 		reason := CloseReasonStale
 		if cn.closeReason != "" {
 			reason = cn.closeReason
 		}
 		_ = p.CloseConn(ctx, cn, reason, MetricStateUsed)
-		return
+	} else {
+		cn.SetLastPutAtNs(getCachedTimeNs())
 	}
 
-	cn.SetLastPutAtNs(getCachedTimeNs())
+	if freeTurn {
+		p.freeTurn()
+	}
 }
 
 func (p *ConnPool) Remove(ctx context.Context, cn *Conn, reason error) {
