@@ -87,8 +87,6 @@ type CmdType uint8
 const (
 	CmdTypeGeneric CmdType = iota
 	CmdTypeString
-	CmdTypeUint
-	CmdTypeUintSlice
 	CmdTypeInt
 	CmdTypeBool
 	CmdTypeFloat
@@ -158,6 +156,8 @@ const (
 	CmdTypeTSTimestampValue
 	CmdTypeTSTimestampValueSlice
 	CmdTypeHotKeys
+	CmdTypeUint
+	CmdTypeUintSlice
 	CmdTypeAREntrySlice
 )
 
