@@ -600,12 +600,7 @@ func (c *PubSub) ReceiveTimeout(ctx context.Context, timeout time.Duration) (int
 		break
 	}
 
-	c.releaseConnWithLock(ctx, cn, err, timeout > 0)
-
-	if err != nil {
-		return nil, err
-	}
-
+	c.releaseConnWithLock(ctx, cn, nil, timeout > 0)
 	return c.newMessage(ctx, cn, cmd.Val())
 }
 

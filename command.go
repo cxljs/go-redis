@@ -9084,7 +9084,7 @@ func (cmd *ClientInfoCmd) readReply(rd *proto.Reader) (err error) {
 // fmt.Sscanf() cannot handle null values
 func parseClientInfo(txt string) (info *ClientInfo, err error) {
 	info = &ClientInfo{}
-	for _, s := range strings.Split(txt, " ") {
+	for s := range strings.SplitSeq(txt, " ") {
 		key, val, ok := strings.Cut(s, "=")
 		if !ok {
 			return nil, fmt.Errorf("redis: unexpected client info data (%s)", s)

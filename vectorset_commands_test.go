@@ -761,7 +761,7 @@ func TestVIsMember(t *testing.T) {
 	cmd := m.lastCmd.(*BoolCmd)
 	if cmd.args[0] != "vismember" || cmd.args[1] != "k" || cmd.args[2] != "e" {
 		t.Errorf("unexpected args: %v", cmd.args)
-  }
+	}
 }
 
 // TestVectorScoreSliceCmdReadReply tests that VectorScoreSliceCmd.readReply handles
@@ -785,8 +785,8 @@ func TestVectorScoreSliceCmdReadReply(t *testing.T) {
 		{
 			// RESP2 flat array: *4\r\n $5\r\nelem1\r\n $3\r\n0.9\r\n $5\r\nelem2\r\n $3\r\n0.8\r\n
 			name: "RESP2 flat array response",
-			respData: []byte(fmt.Sprintf("*4\r\n$5\r\nelem1\r\n$%d\r\n%s\r\n$5\r\nelem2\r\n$%d\r\n%s\r\n",
-				len("0.9"), "0.9", len("0.8"), "0.8")),
+			respData: fmt.Appendf(nil, "*4\r\n$5\r\nelem1\r\n$%d\r\n%s\r\n$5\r\nelem2\r\n$%d\r\n%s\r\n",
+				len("0.9"), "0.9", len("0.8"), "0.8"),
 			want: []VectorScore{
 				{Name: "elem1", Score: 0.9},
 				{Name: "elem2", Score: 0.8},

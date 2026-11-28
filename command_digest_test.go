@@ -63,7 +63,7 @@ func TestDigestCmd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a mock reader that returns the hex string in RESP format
 			// Format: $<length>\r\n<data>\r\n
-			respData := []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(tt.hexStr), tt.hexStr))
+			respData := fmt.Appendf(nil, "$%d\r\n%s\r\n", len(tt.hexStr), tt.hexStr)
 
 			rd := proto.NewReader(newMockConn(respData))
 

@@ -151,7 +151,7 @@ func (s *mockRESP3Server) handleConn(c net.Conn) {
 		switch cmdName {
 		case "HELLO":
 			if helloErr != nil {
-				_, _ = c.Write([]byte(fmt.Sprintf("-ERR %s\r\n", helloErr.Error())))
+				_, _ = c.Write(fmt.Appendf(nil, "-ERR %s\r\n", helloErr.Error()))
 			} else {
 				_, _ = c.Write([]byte("%2\r\n+server\r\n+redis\r\n+proto\r\n:3\r\n"))
 			}
@@ -174,7 +174,7 @@ func (s *mockRESP3Server) handleConn(c net.Conn) {
 			}
 		case "AUTH":
 			if authErr != nil {
-				_, _ = c.Write([]byte(fmt.Sprintf("-WRONGPASS %s\r\n", authErr.Error())))
+				_, _ = c.Write(fmt.Appendf(nil, "-WRONGPASS %s\r\n", authErr.Error()))
 			} else {
 				_, _ = c.Write([]byte("+OK\r\n"))
 			}

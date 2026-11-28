@@ -54,7 +54,7 @@ func newStructSpec(t reflect.Type, fieldTag string) *structSpec {
 			continue
 		}
 
-		tag = strings.Split(tag, ",")[0]
+		tag, _, _ = strings.Cut(tag, ",")
 		if tag == "" {
 			continue
 		}

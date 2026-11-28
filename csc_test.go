@@ -3281,7 +3281,7 @@ func TestDrainErrorClassificationContract(t *testing.T) {
 
 // invalidateFrame builds a RESP3 `>` push frame: ["invalidate", [key]].
 func invalidateFrame(key string) []byte {
-	return []byte(fmt.Sprintf(">2\r\n$10\r\ninvalidate\r\n*1\r\n$%d\r\n%s\r\n", len(key), key))
+	return fmt.Appendf(nil, ">2\r\n$10\r\ninvalidate\r\n*1\r\n$%d\r\n%s\r\n", len(key), key)
 }
 
 type recordingHandler struct {
@@ -4316,8 +4316,8 @@ func (d *drainablePooler) removedHooks() int {
 
 // pubsubMessageFrame builds a RESP3 `>` push frame: ["message", ch, payload].
 func pubsubMessageFrame(ch, payload string) []byte {
-	return []byte(fmt.Sprintf(">3\r\n$7\r\nmessage\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n",
-		len(ch), ch, len(payload), payload))
+	return fmt.Appendf(nil, ">3\r\n$7\r\nmessage\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n",
+		len(ch), ch, len(payload), payload)
 }
 
 // TestDrainPushNotifications_LeavesPubSubFrames: the drain loop must not

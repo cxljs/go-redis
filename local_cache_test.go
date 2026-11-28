@@ -404,7 +404,7 @@ func TestLocalCache_ConcurrentAccess(t *testing.T) {
 				case 0:
 					token, shouldFetch := cache.Reserve(cacheKey, []string{key})
 					if shouldFetch && token != 0 {
-						value := []byte(fmt.Sprintf("v:%d:%d", id, i))
+						value := fmt.Appendf(nil, "v:%d:%d", id, i)
 						if i%9 == 0 {
 							cache.Cancel(cacheKey, token)
 						} else {
@@ -412,7 +412,7 @@ func TestLocalCache_ConcurrentAccess(t *testing.T) {
 						}
 					}
 				case 1:
-					cache.set(cacheKey, []string{key}, []byte(fmt.Sprintf("set:%d:%d", id, i)))
+					cache.set(cacheKey, []string{key}, fmt.Appendf(nil, "set:%d:%d", id, i))
 				case 2:
 					cache.Get(context.Background(), cacheKey)
 				case 3:

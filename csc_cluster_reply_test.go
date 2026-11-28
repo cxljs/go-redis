@@ -268,7 +268,7 @@ func BenchmarkClusterCSCReplyFilter(b *testing.B) {
 	for _, size := range []int{16, 1 << 20} {
 		b.Run(fmt.Sprint(size), func(b *testing.B) {
 			key, _ := cscRenderEntryKey(c.cscKeyPrefix, c.metadataView().cscFingerprint, makeCmd("get", "k"))
-			raw := append([]byte(fmt.Sprintf("$%d\r\n", size)), bytes.Repeat([]byte("v"), size)...)
+			raw := append(fmt.Appendf(nil, "$%d\r\n", size), bytes.Repeat([]byte("v"), size)...)
 			raw = append(raw, '\r', '\n')
 			b.ReportAllocs()
 			b.ResetTimer()

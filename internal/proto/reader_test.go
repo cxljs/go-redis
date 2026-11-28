@@ -128,7 +128,7 @@ func (r *loopFrameReader) Read(p []byte) (int, error) {
 
 func makeBulkStringFrame(payloadSize int) []byte {
 	payload := bytes.Repeat([]byte{'a'}, payloadSize)
-	header := []byte(fmt.Sprintf("$%d\r\n", payloadSize))
+	header := fmt.Appendf(nil, "$%d\r\n", payloadSize)
 	frame := make([]byte, 0, len(header)+payloadSize+2)
 	frame = append(frame, header...)
 	frame = append(frame, payload...)
@@ -348,7 +348,7 @@ func TestReader_ReadStringInto_BulkStringStartingWithEqRefill(t *testing.T) {
 	const size = proto.DefaultBufferSize // exactly bufio buffer size
 	payload := bytes.Repeat([]byte{'='}, size)
 	src := make([]byte, 0, size+16)
-	src = append(src, []byte(fmt.Sprintf("$%d\r\n", size))...)
+	src = append(src, fmt.Appendf(nil, "$%d\r\n", size)...)
 	src = append(src, payload...)
 	src = append(src, '\r', '\n')
 
@@ -521,7 +521,7 @@ func TestReader_ReadStringInto_Large(t *testing.T) {
 	const size = proto.DefaultBufferSize * 4
 	payload := bytes.Repeat([]byte{'a'}, size)
 	src := make([]byte, 0, size+32)
-	src = append(src, []byte(fmt.Sprintf("$%d\r\n", size))...)
+	src = append(src, fmt.Appendf(nil, "$%d\r\n", size)...)
 	src = append(src, payload...)
 	src = append(src, '\r', '\n')
 
