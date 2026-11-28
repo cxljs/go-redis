@@ -507,8 +507,8 @@ func TestFullDuplexValidateRejects(t *testing.T) {
 		// branch fired rather than a generic check (the FD checks run first).
 		wantMsg string
 	}{
-		{"unordered", AutoPipelineOptions{FullDuplex: true, Unordered: true}, "FullDuplex requires an ordered stream"},
-		{"concurrent-batches", AutoPipelineOptions{FullDuplex: true, MaxConcurrentBatches: 2}, "FullDuplex requires MaxConcurrentBatches"},
+		{"unordered", AutoPipelineOptions{FullDuplex: true, Unordered: true}, "Unordered must not be set with FullDuplex"},
+		{"concurrent-batches", AutoPipelineOptions{FullDuplex: true, MaxConcurrentBatches: 2}, "MaxConcurrentBatches=2 must not be set above 1"},
 		{"neg-window", AutoPipelineOptions{FullDuplex: true, FullDuplexWindow: -1}, "FullDuplexWindow"},
 		{"neg-idle", AutoPipelineOptions{FullDuplex: true, FullDuplexIdleTimeout: -1}, "FullDuplexIdleTimeout"},
 		{"neg-maxhold", AutoPipelineOptions{FullDuplex: true, FullDuplexMaxHold: -1}, "FullDuplexMaxHold"},

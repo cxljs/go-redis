@@ -5073,9 +5073,9 @@ func TestFDShardsReplyCorrelation(t *testing.T) {
 	t.Logf("ok: %d keys correlated, 500 same-key write-then-read ordered, %d engines", keys, shards)
 }
 
-// The two-sited rule: NumShards>1 under FullDuplex must actually ENGAGE full
-// duplex, not fall back to half-duplex shards. Config() reports the EFFECTIVE
-// state, so a fallback surfaces as FullDuplex:false.
+// NumShards>1 under FullDuplex must actually ENGAGE full duplex, not fall
+// back to half-duplex shards. Config() reports the EFFECTIVE state, so a
+// fallback surfaces as FullDuplex:false.
 func TestFDShardsKeepsFullDuplexOn(t *testing.T) {
 	ctx := context.Background()
 	cl := redis.NewClient(&redis.Options{Addr: apTestAddr()})

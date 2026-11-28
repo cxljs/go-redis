@@ -77,6 +77,11 @@ type AutoPipelineOptions struct {
 	// ordering, it is only allowed together with Unordered: true — otherwise the
 	// configuration is rejected (see Validate). This makes the trade-off
 	// explicit: you cannot accidentally lose ordering by raising concurrency.
+	//
+	// It only takes effect on the half-duplex path; under FullDuplex it has
+	// no effect: a value above 1 is rejected by Validate as a construction
+	// error. Full-duplex concurrency is governed instead by FullDuplexWindow
+	// (in-flight window per pipe) and FullDuplexPipes (parallel pipes).
 	MaxConcurrentBatches int
 
 	// Unordered must be set to true to allow MaxConcurrentBatches > 1. It is the
@@ -84,6 +89,12 @@ type AutoPipelineOptions struct {
 	// command ordering in exchange for throughput. With the default (false),
 	// MaxConcurrentBatches is forced to 1 (an ordered stream) and any value > 1
 	// is a configuration error.
+	//
+	// It only takes effect on the half-duplex path; under FullDuplex it has
+	// no effect: Validate rejects Unordered:true there as a construction
+	// error. To trade ordering for parallel wires under FullDuplex, raise
+	// FullDuplexPipes — that keeps per-first-key order rather than abandoning
+	// ordering entirely.
 	Unordered bool
 
 	// FullDuplex enables the ordered full-duplex dispatch path: one held
@@ -506,34 +517,20 @@ func DefaultBlockingAutoPipelineOptions() *AutoPipelineOptions {
 // call, not in NewClient.
 func (cfg *AutoPipelineOptions) Validate() error {
 	if cfg.FullDuplex {
-		// Full-duplex matches replies to commands by FIFO position on one connection,
-		// which Unordered / parallel batches break. Checked BEFORE the generic
-		// MaxConcurrentBatches rule so the message is FullDuplex-specific.
 		if cfg.Unordered {
-			return fmt.Errorf("redis: AutoPipelineOptions.FullDuplex requires an ordered stream " +
-				"(Unordered:false); full-duplex matches replies by in-flight FIFO position, which " +
-				"Unordered breaks")
+			return fmt.Errorf("redis: AutoPipelineOptions.Unordered must not be set with FullDuplex — " +
+				"it has no effect there and contradicts the mode: full-duplex matches replies by " +
+				"in-flight FIFO position on one connection, which an unordered stream breaks; for " +
+				"parallel wires use FullDuplexPipes")
 		}
 		if cfg.MaxConcurrentBatches > 1 {
-			return fmt.Errorf("redis: AutoPipelineOptions.FullDuplex requires MaxConcurrentBatches<=1 "+
-				"(an ordered single stream); got %d", cfg.MaxConcurrentBatches)
+			return fmt.Errorf("redis: AutoPipelineOptions.MaxConcurrentBatches=%d must not be set above 1 "+
+				"with FullDuplex — it has no effect there (full-duplex concurrency is governed by "+
+				"FullDuplexWindow per pipe and FullDuplexPipes); keep it at 0 (default) or 1",
+				cfg.MaxConcurrentBatches)
 		}
-		// A USER-set NumShards>1 contradicts FullDuplex the same way (one held FIFO
-		// connection is one stream); reject it rather than silently falling back to
-		// half-duplex. contentSharded is exempt: that flag is set by the CLUSTER
-		// wiring (never by users), where the silent fallback IS the documented
-		// behavior, since the options type cannot see the client type.
-		// NumShards>1 under FullDuplex means N engines, each holding its own
-		// connection, routed by key hash so per-key order still holds (see
-		// autopipeline_fd_shards.go). It is therefore no longer rejected here.
-		//
-		// This is one half of a TWO-SITED rule: the fdOn gate in
-		// newAutoPipeliner must relax with it. Relaxing only this check leaves
-		// full duplex silently OFF for NumShards>1 — commands fall through to
-		// the half-duplex shards, which are unordered, and a same-key
-		// write-then-read can read the stale value.
-		_ = cfg.contentSharded
 	}
+
 	if cfg.MaxConcurrentBatches > 1 && !cfg.Unordered {
 		return fmt.Errorf("redis: AutoPipelineOptions.MaxConcurrentBatches=%d requires Unordered:true "+
 			"(parallel batches do not preserve command ordering); set Unordered:true to allow it, "+
@@ -1357,11 +1354,10 @@ func newAutoPipeliner(pipeliner cmdableClient, config *AutoPipelineOptions, bloc
 	var fdClient *Client
 	fdOn := false
 	// NOT gated on nShards: NumShards>1 selects several engines rather than
-	// disabling full duplex. This is the second half of the two-sited rule
-	// noted in Validate — while this line also required nShards==1, a
+	// disabling full duplex. While this line also required nShards==1, a
 	// NumShards>1 caller got half-duplex round-robin shards instead of the
 	// ordered engine it asked for, silently.
-	if config.FullDuplex && !config.Unordered && config.MaxConcurrentBatches <= 1 {
+	if config.FullDuplex {
 		if c, ok := pipeliner.(*Client); ok && c.getPipelinePool() != nil {
 			fdOn, fdClient = true, c
 		}
@@ -1369,7 +1365,7 @@ func newAutoPipeliner(pipeliner cmdableClient, config *AutoPipelineOptions, bloc
 	// MultiDB full duplex forces NumShards to 1 (see the mdbFD branch below), so
 	// it is exempt here: rejecting first would make that coercion unreachable.
 	_, isMultiDB := pipeliner.(*MultiDBClient)
-	mdbFDReq := isMultiDB && config.FullDuplex && !config.Unordered && config.MaxConcurrentBatches <= 1
+	mdbFDReq := isMultiDB && config.FullDuplex
 	if config.NumShards > 1 && !config.Unordered && !blocking &&
 		!config.contentSharded && !fdOn && !mdbFDReq {
 		return nil, fmt.Errorf(
@@ -1445,7 +1441,7 @@ func newAutoPipeliner(pipeliner cmdableClient, config *AutoPipelineOptions, bloc
 	// routes past it.
 	var clusterFDCC *ClusterClient
 	clusterFDOn := false
-	if config.FullDuplex && !config.Unordered && config.MaxConcurrentBatches <= 1 {
+	if config.FullDuplex {
 		// The router always routes to the slot's MASTER node child (slotMasterNode).
 		// A client configured for replica routing — ReadOnly, RouteByLatency, or
 		// RouteRandomly — would have those options silently ignored under cluster FD,
